@@ -1,0 +1,2 @@
+export function prepareDownload(content,name,type){const file=new File([content],name,{type});const url=URL.createObjectURL(file);let disposed=false;return {file,url,name,type,dispose(){if(!disposed){URL.revokeObjectURL(url);disposed=true}}}}
+export async function shareDownload(file,navigatorAPI=navigator){if(!navigatorAPI.canShare?.({files:[file]}))throw Error('Este navegador no permite compartir archivos. Usa Descargar archivo o Abrir archivo.');await navigatorAPI.share({files:[file],title:file.name})}

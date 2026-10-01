@@ -1,0 +1,11 @@
+node_modules/
+.sites-runtime/
+.env
+.env.*
+!.env.example
+upload/
+uploads/
+tmp/
+*.pdf
+*.tar.gz
+*.zip
