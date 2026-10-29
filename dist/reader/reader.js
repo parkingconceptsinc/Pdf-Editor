@@ -304,7 +304,9 @@ $('openBtn').onclick=()=> $('fileInput').click();$('emptyOpenBtn').onclick=()=> 
 $('saveBtn').onclick=()=>{const d=active();if(d)downloadEdited(d);};$('exportCurrentBtn').onclick=()=>{const d=active();if(d)downloadEdited(d);else toast('Open a PDF first.');};
 $('originalBtn').onclick=()=>downloadOriginal(active());$('printBtn').onclick=printDocument;$('printRightBtn').onclick=printDocument;
 $('bulkBtn').onclick=()=>{state.previewMatches=[];$('bulkResults').hidden=true;$('applyBulk').disabled=true;openModal('bulkDialog');};$('bulkRightBtn').onclick=$('bulkBtn').onclick;
-$('closeBulk').onclick=$('cancelBulk').onclick=()=>closeModal('bulkDialog');$('previewBulk').onclick=previewReplacement;$('applyBulk').onclick=applyBulk;\nfor(const id of ['findText','replaceText','bulkScope','caseSensitive'])$(id).addEventListener('input',()=>{state.previewMatches=[];$('applyBulk').disabled=true;});\n$('searchBtn').onclick=runDocumentSearch;$('docSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runDocumentSearch();}});
+$('closeBulk').onclick=$('cancelBulk').onclick=()=>closeModal('bulkDialog');$('previewBulk').onclick=previewReplacement;$('applyBulk').onclick=applyBulk;
+for(const id of ['findText','replaceText','bulkScope','caseSensitive'])$(id).addEventListener('input',()=>{state.previewMatches=[];$('applyBulk').disabled=true;});
+$('searchBtn').onclick=runDocumentSearch;$('docSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runDocumentSearch();}});
 $('prevPage').onclick=()=>gotoNext(-1);$('nextPage').onclick=()=>gotoNext(1);$('pageNumber').onchange=e=>goPageOrdinal(Number(e.target.value));
 $('zoomFit').onchange=e=>changeZoom(e.target.value);$('zoomOut').onclick=()=>changeZoom(String(Math.max(50,Math.round((Number(state.zoom)||100)-10))));$('zoomIn').onclick=()=>changeZoom(String(Math.min(250,Math.round((Number(state.zoom)||100)+10))));
 $('rotateBtn').onclick=()=>{const d=active();if(!d)return;d.rotations[state.page]=((getPageRotation(d,state.page)+90)%360);renderCurrent();renderThumbnails();};
