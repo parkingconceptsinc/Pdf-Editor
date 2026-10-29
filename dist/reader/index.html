@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#10141d"><meta name="description" content="PDF Studio Reader — read, annotate and batch-replace text in PDF documents.">
+<title>PDF Studio Reader</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="reader.css">
+</head>
+<body>
+<header class="topbar">
+ <a class="brand" href="./" aria-label="PDF Studio Reader home"><span class="brand-icon">P</span><span>PDF <b>STUDIO</b><small>READER & EDITOR</small></span></a>
+ <div class="file-title"><strong id="fileName">No document open</strong><span id="fileMeta">Open a PDF to get started</span></div>
+ <div class="top-actions"><button id="themeBtn" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">◐</button><button id="openBtn" class="btn secondary">Open PDF</button><button id="bulkBtn" class="btn secondary">Batch replace</button><button id="saveBtn" class="btn primary" disabled>↓ <span>Export PDF</span></button></div>
+</header>
+<input id="fileInput" type="file" accept="application/pdf,.pdf" multiple hidden>
+<main class="app-shell">
+ <aside class="left-panel">
+  <div class="panel-heading"><div><span class="eyebrow">YOUR LIBRARY</span><h2>Documents <span id="docCount">0</span></h2></div><button id="addMoreBtn" class="icon-btn" title="Add more PDFs">＋</button></div>
+  <div id="documents" class="documents"><div class="welcome-mini"><span>▤</span><b>No documents yet</b><small>Open one or more PDFs to start.</small></div></div>
+  <div class="panel-tabs"><button class="panel-tab active" data-panel="pages">Pages</button><button class="panel-tab" data-panel="outline">Outline</button></div>
+  <div id="thumbnails" class="thumbnails"><div class="welcome-mini"><span>▤</span><b>Your pages appear here</b><small>Open a PDF to see page previews.</small></div></div>
+  <div id="outline" class="outline" hidden><p class="muted">This PDF has no outline, or it has not been loaded.</p></div>
+  <div class="panel-footer"><span class="status-dot"></span><span>Private · processed on this device</span></div>
+ </aside>
+ <section class="document-area">
+  <div class="toolbar">
+   <div class="tool-group"><button class="tool active" data-tool="select" title="Select / pan">↖ <span>Select</span></button><button class="tool" data-tool="text" title="Place a text note">T <span>Add text</span></button><button class="tool" data-tool="highlight" title="Highlight an area">▰ <span>Highlight</span></button><button class="tool" data-tool="draw" title="Draw a mark">✎ <span>Draw</span></button></div>
+   <div class="tool-group view-tools"><button id="rotateBtn" class="icon-btn" title="Rotate page">↻</button><i></i><button id="zoomOut" class="icon-btn" title="Zoom out">−</button><span id="zoomValue">Fit</span><button id="zoomIn" class="icon-btn" title="Zoom in">+</button><select id="zoomFit" aria-label="Zoom mode"><option value="fit">Fit page</option><option value="width">Fit width</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option><option value="200">200%</option></select><i></i><button id="fullScreenBtn" class="icon-btn" title="Fullscreen">⛶</button></div>
+  </div>
+  <div id="emptyState" class="empty-state"><div class="hero-art"><div class="hero-page"><span></span><span></span><span></span><span></span><span></span></div><div class="hero-spark">✦</div></div><div class="eyebrow">YOUR DOCUMENT WORKSPACE</div><h1>Make room for the details.</h1><p>Read, search, annotate and batch-replace text in a calmer, faster workspace.</p><button id="emptyOpenBtn" class="btn primary large">＋ Open PDF documents</button><div class="feature-row"><span>⌕ Search</span><span>▰ Highlight</span><span>✎ Annotate</span><span>⇄ Batch replace</span><span>↓ Export</span></div></div>
+  <div id="viewer" class="viewer" hidden><div id="pageStack" class="page-stack"></div></div>
+  <div class="bottom-bar"><div class="page-nav"><button id="prevPage" class="icon-btn" disabled aria-label="Previous page">‹</button><label>Page <input id="pageNumber" type="number" min="1" value="1" disabled> <span id="pageCount">of 0</span></label><button id="nextPage" class="icon-btn" disabled aria-label="Next page">›</button></div><div class="bottom-status" id="statusText">Ready</div><div class="bottom-right"><button id="printBtn" class="icon-btn" title="Print current PDF">▣</button><button id="originalBtn" class="icon-btn" title="Download untouched original">⇩</button></div></div>
+ </section>
+ <aside class="right-panel">
+  <div class="right-heading"><div><div class="eyebrow">WORKSPACE</div><h2>Document tools</h2></div></div>
+  <div class="tool-card"><div class="card-icon purple">✦</div><div><b>Quick actions</b><small>Manage the open document</small></div></div>
+  <button id="exportCurrentBtn" class="action-row"><span class="row-icon">↓</span><span><b>Export edited copy</b><small>Keep an untouched original</small></span><span>›</span></button>
+  <button id="printRightBtn" class="action-row"><span class="row-icon">▣</span><span><b>Print document</b><small>Open the system print dialog</small></span><span>›</span></button>
+  <button id="bulkRightBtn" class="action-row"><span class="row-icon">⇄</span><span><b>Batch find & replace</b><small>Update repeated text</small></span><span>›</span></button>
+  <div class="section-rule"></div><div class="section-title">ANNOTATIONS <span id="annotationCount">0</span></div>
+  <div id="annotationList" class="annotation-list"><div class="annotation-empty">Your notes and highlights will show up here.</div></div>
+  <div class="section-rule"></div><div class="section-title">PAGE ORGANIZATION</div>
+  <button id="deletePageBtn" class="action-row"><span class="row-icon">⌫</span><span><b>Delete current page</b><small>Remove from exported copy</small></span><span>›</span></button>
+  <div class="privacy-card"><span>◈</span><div><b>Your files stay yours</b><p>PDFs are processed locally in this browser. They are not uploaded to a server.</p></div></div>
+ </aside>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="textDialog"><form id="textForm"><div class="dialog-head"><div><span class="eyebrow">ANNOTATION</span><h2>Add a text note</h2></div><button type="button" class="icon-btn" id="cancelText">×</button></div><label for="annotationText">Text to place on the page</label><textarea id="annotationText" rows="4" maxlength="1500" placeholder="Write a note…"></textarea><div class="dialog-actions"><button type="button" class="btn secondary" id="cancelText2">Cancel</button><button class="btn primary">Add note</button></div></form></dialog>
+<dialog id="bulkDialog"><form id="bulkForm"><div class="dialog-head"><div><span class="eyebrow">BATCH TOOL</span><h2>Find and replace text</h2><p>Preview matches across loaded PDFs before exporting copies.</p></div><button type="button" class="icon-btn" id="closeBulk">×</button></div>
+ <label>Find this text<input id="findText" required maxlength="200" placeholder="Exact text to find"></label>
+ <label>Replace with<input id="replaceText" maxlength="200" placeholder="Replacement text"></label>
+ <div class="bulk-options"><label>Apply to<select id="bulkScope"><option value="all">All loaded PDFs</option><option value="current">Current PDF only</option></select></label><label class="check-label"><input id="caseSensitive" type="checkbox" checked> Match case</label></div>
+ <div class="bulk-warning"><b>Supported format</b><p>For safety, bulk replacement edits text contained in a single PDF text-string operator. Scanned pages, split text runs and some embedded-font encodings are not supported. Always inspect the exported copy.</p></div>
+ <button id="previewBulk" type="button" class="btn secondary full-btn">Preview matches</button><div id="bulkResults" class="bulk-results" hidden></div>
+ <div class="dialog-actions"><button type="button" id="cancelBulk" class="btn secondary">Cancel</button><button id="applyBulk" class="btn primary" disabled>Replace & prepare copies</button></div>
+ </form></dialog>
+<div id="confirmLayer" class="confirm-layer" hidden><div class="confirm-card"><h3>Delete this page?</h3><p>This only changes the exported copy. The original file stays untouched.</p><div><button id="cancelDelete" class="btn secondary">Cancel</button><button id="confirmDelete" class="btn danger">Delete page</button></div></div></div>
+<script src="../vendor/pdf-lib.js"></script><script type="module" src="reader.js"></script>
+</body></html>
