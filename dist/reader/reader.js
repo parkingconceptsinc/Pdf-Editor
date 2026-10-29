@@ -2,7 +2,7 @@ import * as pdfjs from '../vendor/pdf.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('../vendor/pdf.worker.mjs', import.meta.url).href;
 const $ = id => document.getElementById(id);
-const state = { docs: [], activeId: null, page: 0, zoom: 'fit', tool: 'select', pendingPoint: null, gesture: null, previewMatches: [], toastTimer: null };
+const state = { docs: [], activeId: null, page: 0, zoom: 'fit', tool: 'select', pendingPoint: null, gesture: null, previewMatches: [], searchResults: [], toastTimer: null };
 const decoder = new TextDecoder('windows-1252');
 const charToByte = new Map();
 for (let i = 0; i < 256; i++) charToByte.set(decoder.decode(new Uint8Array([i])), i);
@@ -45,7 +45,7 @@ async function openFiles(fileList) {
   $('fileInput').value = '';
 }
 function switchDocument(id) {
-  state.activeId=id; const d=active(); state.page=d ? (visiblePages(d)[0] ?? 0) : 0; state.gesture=null; renderAll();
+  state.activeId=id; const d=active(); state.page=d ? (visiblePages(d)[0] ?? 0) : 0; state.gesture=null; state.searchResults=[]; $('docSearch').value=''; $('searchResults').hidden=true; $('searchResults').replaceChildren(); renderAll();
 }
 function renderDocuments() {
   const box=$('documents'); box.replaceChildren();
@@ -150,6 +150,24 @@ async function renderThumb(doc,index,button){
   if(!button.isConnected||doc.id!==state.activeId)return;
   try{const p=await doc.pdf.getPage(index+1);const vp=p.getViewport({scale:112/p.getViewport({scale:1}).width,rotation:(p.rotate+getPageRotation(doc,index))%360});const c=document.createElement('canvas');c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);c.style.width=Math.min(112,vp.width)+'px';c.style.height='auto';await p.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;if(!button.isConnected)return;const old=button.querySelector('.thumb-canvas-placeholder,canvas');if(old)old.replaceWith(c);else button.prepend(c);}catch{}
 }
+async function runDocumentSearch(){
+ const d=active(),query=$('docSearch').value.trim();const box=$('searchResults');box.replaceChildren();state.searchResults=[];
+ if(!d||!query){box.hidden=true;if(!query)toast('Enter text to search for.');return;}
+ box.hidden=false;const status=document.createElement('p');status.className='muted';status.textContent='Searching pages…';box.append(status);setStatus('Searching PDF text…');
+ const q=query.toLocaleLowerCase();let results=[];
+ try{
+  for(let i=0;i<d.pageCount;i++){setStatus('Searching page '+(i+1)+' of '+d.pageCount+'…');const page=await d.pdf.getPage(i+1);const tc=await page.getTextContent();const text=tc.items.map(x=>x.str||'').join(' ');const lower=text.toLocaleLowerCase();let pos=0;
+   while((pos=lower.indexOf(q,pos))!==-1){results.push({page:i,snippet:text.slice(Math.max(0,pos-35),Math.min(text.length,pos+query.length+50)),position:pos});pos+=Math.max(1,q.length);if(results.length>=150)break;}
+   if(results.length>=150)break;
+  }
+  state.searchResults=results;box.replaceChildren();
+  if(!results.length){const p=document.createElement('p');p.className='muted';p.textContent='No text matches found. Scanned PDFs require OCR, which is not included.';box.append(p);}
+  else{const title=document.createElement('p');title.className='muted';title.textContent=results.length===150?'First 150 matches':' '+results.length+' match(es)';box.append(title);
+   for(let i=0;i<results.length;i++){const r=results[i];const b=document.createElement('button');b.type='button';b.className='search-result';const p=document.createElement('b');p.textContent='Page '+(r.page+1);const small=document.createElement('small');small.textContent=(r.snippet.trim()||query);b.append(p,small);b.onclick=()=>{state.page=r.page;renderCurrent();renderThumbnails();setStatus('Opened search result on page '+(r.page+1));};box.append(b);}
+  }
+  setStatus('Search complete');if(!results.length)toast('No selectable text found for this query.');
+ }catch(e){box.replaceChildren();const p=document.createElement('p');p.className='muted';p.textContent='Search failed: '+e.message;box.append(p);toast('Search failed: '+e.message);}
+}
 function renderAnnotationsList(){
  const d=active(),box=$('annotationList');box.replaceChildren();const anns=d?d.annotations:[];
  $('annotationCount').textContent=String(anns.length);
@@ -226,7 +244,7 @@ async function previewReplacement(){
  finally{$('previewBulk').disabled=false;}
 }
 function bulkTargets(){const d=active();return $('bulkScope').value==='current'?(d?[d]:[]):state.docs.slice();}
-async function performReplacement(doc,from,to,caseSensitive){
+async function prepareReplacement(doc,from,to,caseSensitive){
  const parsed=await readTextOperators(doc.bytes);let total=0;
  for(const p of parsed.pages){
   let source=p.source;const edits=[];
@@ -236,20 +254,23 @@ async function performReplacement(doc,from,to,caseSensitive){
   for(const e of edits.sort((a,b)=>b.start-a.start))source=source.slice(0,e.start)+e.text+source.slice(e.end);
   if(edits.length){const stream=parsed.pdf.context.flateStream(stringToBytes(source));const page=parsed.pdf.getPage(p.index);page.node.set(PDFLib.PDFName.of('Contents'),parsed.pdf.context.register(stream));}
  }
- if(total)doc.bytes=await parsed.pdf.save({useObjectStreams:false});
- return total;
+ return {bytes:total?await parsed.pdf.save({useObjectStreams:false}):doc.bytes,total};
 }
 async function applyBulk(){
  const from=$('findText').value,to=$('replaceText').value,caseSensitive=$('caseSensitive').checked;const results=state.previewMatches.filter(r=>r.count>0);
  if(!results.length){toast('Preview matches before replacing.');return;}
- if(!to && !confirm('The replacement text is blank. This will remove every match. Continue?'))return;
+ if(!to&&!confirm('The replacement text is blank. This will remove every match. Continue?'))return;
  $('applyBulk').disabled=true;$('previewBulk').disabled=true;let changedFiles=0,total=0;
  try{
-  for(const item of results){setStatus('Updating '+item.doc.name+'…');const count=await performReplacement(item.doc,from,to,caseSensitive);if(count){item.doc.bulkChanges+=count;item.doc.pdf?.destroy();item.doc.pdf=await pdfjs.getDocument({data:item.doc.bytes.slice(),useSystemFonts:true}).promise;item.doc.pageCount=item.doc.pdf.numPages;changedFiles++;total+=count;}}
+  const prepared=[];
+  for(const item of results){setStatus('Preparing '+item.doc.name+'…');const result=await prepareReplacement(item.doc,from,to,caseSensitive);if(result.total)prepared.push({doc:item.doc,bytes:result.bytes,total:result.total});}
+  for(const item of prepared){item.doc.bytes=item.bytes;item.doc.bulkChanges+=item.total;try{item.doc.pdf?.destroy();}catch{}item.doc.pdf=await pdfjs.getDocument({data:item.doc.bytes.slice(),useSystemFonts:true}).promise;item.doc.pageCount=item.doc.pdf.numPages;changedFiles++;total+=item.total;}
   renderAll();$('bulkResults').replaceChildren();const info=document.createElement('div');info.className='bulk-total';info.textContent='Replaced '+total+' occurrence(s) in '+changedFiles+' PDF(s). Export each edited copy below.';$('bulkResults').append(info);
-  for(const item of results){if(!item.doc.bulkChanges)continue;const row=document.createElement('div');row.className='bulk-result-row';const name=document.createElement('span');name.textContent=item.doc.name;const button=document.createElement('button');button.type='button';button.className='btn secondary';button.textContent='Download copy';button.onclick=()=>downloadEdited(item.doc);row.append(name,button);$('bulkResults').append(row);}
-  toast('Batch replacement complete. Original files remain unchanged.');setStatus('Batch replacement complete');
- }catch(e){toast('Replacement stopped: '+e.message+'. Exported files were not created.');setStatus('Replacement error');}
+  for(const item of prepared){const row=document.createElement('div');row.className='bulk-result-row';const name=document.createElement('span');name.textContent=item.doc.name+' · '+item.total+' matches';const button=document.createElement('button');button.type='button';button.className='btn secondary';button.textContent='Download copy';button.onclick=()=>downloadEdited(item.doc);row.append(name,button);$('bulkResults').append(row);}
+  if(!prepared.length)toast('No supported matches could be changed. No document was modified.');
+  else toast('Batch replacement complete. Original files remain unchanged.');
+  setStatus('Batch replacement complete');
+ }catch(e){toast('Nothing was applied because preparation failed: '+e.message);setStatus('Replacement error');}
  finally{$('applyBulk').disabled=false;$('previewBulk').disabled=false;}
 }
 async function exportDoc(doc){
@@ -274,7 +295,7 @@ async function downloadEdited(doc){
 }
 async function downloadOriginal(doc){if(!doc)return;triggerDownload(doc.originalBytes,doc.name);toast('Original copy downloaded.');}
 async function printDocument(){
- const d=active();if(!d)return;try{const bytes=await exportDoc(d);const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));const w=window.open(url,'_blank','noopener');if(!w)toast('Allow pop-ups to open the PDF for printing.');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){toast('Could not prepare PDF for printing: '+e.message);}
+ const d=active();if(!d)return;try{const bytes=await exportDoc(d);const url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));const w=window.open(url,'_blank');if(!w)toast('Allow pop-ups to open the PDF for printing.');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){toast('Could not prepare PDF for printing: '+e.message);}
 }
 function gotoNext(delta){const d=active();if(!d)return;const vis=visiblePages(d);const i=vis.indexOf(state.page);const n=Math.max(0,Math.min(vis.length-1,i+delta));state.page=vis[n];renderCurrent();renderThumbnails();}
 function deleteCurrentPage(){const d=active();if(!d)return;const vis=visiblePages(d);if(vis.length<=1){toast('At least one page must remain in the exported PDF.');return;}d.removed.add(state.page);const next=visiblePages(d);state.page=next[Math.min(vis.indexOf(state.page),next.length-1)];$('confirmLayer').hidden=true;renderAll();toast('Page marked for removal from the exported copy.');}
@@ -283,7 +304,7 @@ $('openBtn').onclick=()=> $('fileInput').click();$('emptyOpenBtn').onclick=()=> 
 $('saveBtn').onclick=()=>{const d=active();if(d)downloadEdited(d);};$('exportCurrentBtn').onclick=()=>{const d=active();if(d)downloadEdited(d);else toast('Open a PDF first.');};
 $('originalBtn').onclick=()=>downloadOriginal(active());$('printBtn').onclick=printDocument;$('printRightBtn').onclick=printDocument;
 $('bulkBtn').onclick=()=>{state.previewMatches=[];$('bulkResults').hidden=true;$('applyBulk').disabled=true;openModal('bulkDialog');};$('bulkRightBtn').onclick=$('bulkBtn').onclick;
-$('closeBulk').onclick=$('cancelBulk').onclick=()=>closeModal('bulkDialog');$('previewBulk').onclick=previewReplacement;$('applyBulk').onclick=applyBulk;
+$('closeBulk').onclick=$('cancelBulk').onclick=()=>closeModal('bulkDialog');$('previewBulk').onclick=previewReplacement;$('applyBulk').onclick=applyBulk;\nfor(const id of ['findText','replaceText','bulkScope','caseSensitive'])$(id).addEventListener('input',()=>{state.previewMatches=[];$('applyBulk').disabled=true;});\n$('searchBtn').onclick=runDocumentSearch;$('docSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runDocumentSearch();}});
 $('prevPage').onclick=()=>gotoNext(-1);$('nextPage').onclick=()=>gotoNext(1);$('pageNumber').onchange=e=>goPageOrdinal(Number(e.target.value));
 $('zoomFit').onchange=e=>changeZoom(e.target.value);$('zoomOut').onclick=()=>changeZoom(String(Math.max(50,Math.round((Number(state.zoom)||100)-10))));$('zoomIn').onclick=()=>changeZoom(String(Math.min(250,Math.round((Number(state.zoom)||100)+10))));
 $('rotateBtn').onclick=()=>{const d=active();if(!d)return;d.rotations[state.page]=((getPageRotation(d,state.page)+90)%360);renderCurrent();renderThumbnails();};
